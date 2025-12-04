@@ -1,0 +1,224 @@
+#части кода ответственная за передачу данных из программы на сайт
+
+
+import ftplib
+import re
+
+
+class UcozFTPUploader:
+    def __init__(self, parking_key):
+        self.parking_key = parking_key
+        self.ftp_config = {
+            'host': 'parkofka.ucoz.org',
+            'username': 'fparkofka',
+            'password': 'qwerty7',
+            'remote_path': f'/parking_status_{parking_key}.json'
+        }
+        self.enabled = True
+
+    def upload(self, json_data):
+        
+        if not self.enabled:
+            return False
+
+        try:
+            
+            json_str = json.dumps(json_data, indent=2, ensure_ascii=False)
+
+            
+            temp_file = f'temp_parking_status_{self.parking_key}.json'
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                f.write(json_str)
+
+
+            print(f"Подключение к FTP {self.ftp_config['host']}...")
+            ftp = ftplib.FTP(self.ftp_config['host'])
+            ftp.login(self.ftp_config['username'], self.ftp_config['password'])
+
+        
+            ftp.set_pasv(True)
+
+           
+            with open(temp_file, 'rb') as f:
+                ftp.storbinary(f'STOR {self.ftp_config["remote_path"]}', f)
+
+            
+            ftp.quit()
+
+            
+            os.remove(temp_file)
+
+            print(f" Файл загружен на Сайт: {time.strftime('%H:%M:%S')}")
+            return True
+
+        except ftplib.all_errors as e:
+            print(f" Ошибка FTP: {e}")
+            return False
+        except Exception as e:
+            print(f" Общая ошибка: {e}")
+            return False
+
+
+
+
+        self.uploader = UcozFTPUploader(self.parking_key)
+        self.last_upload_time = 0
+        self.upload_interval = 10
+        self.upload_enabled = True
+
+        print(f"\nСистема для парковки: {parking_info['title']}")
+        print(f"Ключ: {self.parking_key}")
+        print(f"Файлы: {self.parking_file}, {self.status_file}")
+
+   
+
+
+
+
+    def save_current_status(self, occupied_count, total_spots):
+        """Сохраняет текущий статус парковки"""
+        status_data = []
+
+        for spot in self.parking_spots:
+            status_data.append({
+                'id': spot['id'],
+                'occupied': spot['occupied']
+            })
+
+       
+        try:
+            with open(self.status_file, 'w', encoding='utf-8') as f:
+                json.dump(status_data, f, ensure_ascii=False, indent=2)
+
+            if self.frame_count % 100 == 0:
+                print(f"Статус: {occupied_count}/{total_spots} занято")
+
+        except Exception as e:
+            print(f"Ошибка сохранения: {e}")
+
+      
+        if self.upload_enabled and status_data:
+            current_time = time.time()
+            if current_time - self.last_upload_time > self.upload_interval:
+                if self.uploader.upload(status_data):
+                    self.last_upload_time = current_time
+
+          print("\n" + "=" * 50)
+        print(f"СТАТУС ПАРКОВКИ: {self.parking_info['title']}")
+        print("=" * 50)
+
+        for spot in self.parking_spots:
+            status = "ЗАНЯТО" if spot['occupied'] else "СВОБОДНО"
+            print(f"Место {spot['id']}: {status}")
+            print("\n" + "=" * 50)
+            print("Программа завершена.")
+            print(f"Файл: {self.status_file}")
+            print(f"Парковка: {self.parking_info['title']}")
+            print("=" * 50)
+
+
+def read_html_parkings():
+    """Читает парковки из HTML файла"""
+    html_files = [f for f in os.listdir('.') if f.endswith('.html')]
+
+    if not html_files:
+        print("HTML файлы не найдены.")
+        return []
+
+    html_file = html_files[0]
+    print(f"Читаю файл: {html_file}")
+
+    try:
+        with open(html_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        _markersMeta
+        pattern = r'_markersMeta\s*=\s*\[(.*?)\];'
+        match = re.search(pattern, content, re.DOTALL)
+
+        if not match:
+            print("Не найден массив _markersMeta")
+            return []
+
+        markers_text = match.group(1)
+
+        # Простой парсинг объектов
+        objects = re.findall(r'\{[^}]+\}', markers_text)
+
+        parkings = []
+
+        for i, obj in enumerate(objects):
+            try:
+                # Извлекаем поля
+                lat_match = re.search(r'lat\s*:\s*([\d.]+)', obj)
+                lon_match = re.search(r'lon\s*:\s*([\d.]+)', obj)
+                key_match = re.search(r'spotKey\s*:\s*[\'"]([^\'"]+)[\'"]', obj)
+                title_match = re.search(r'title\s*:\s*[\'"]([^\'"]+)[\'"]', obj)
+
+                if lat_match and lon_match:
+                    lat = float(lat_match.group(1))
+                    lon = float(lon_match.group(1))
+                    key = key_match.group(1) if key_match else f"parking_{i + 1}"
+                    title = title_match.group(1) if title_match else f"Парковка {i + 1}"
+
+                    parkings.append({
+                        'key': key,
+                        'title': title,
+                        'lat': lat,
+                        'lon': lon
+                    })
+            except:
+                continue
+
+        return parkings
+
+    except Exception as e:
+        print(f"Ошибка чтения HTML: {e}")
+        return []
+
+
+def select_parking(parkings):
+    """Выбор парковки"""
+    if not parkings:
+        print("Нет парковок для выбора")
+        return None
+
+    print("\n" + "=" * 50)
+    print("ВЫБОР ПАРКОВКИ")
+    print("=" * 50)
+
+    for i, parking in enumerate(parkings, 1):
+        print(f"{i}. {parking['title']}")
+        print(f"   Ключ: {parking['key']}")
+        print()
+
+    try:
+        choice = int(input(f"Выберите парковку (1-{len(parkings)}): "))
+        if 1 <= choice <= len(parkings):
+            return parkings[choice - 1]
+        else:
+            print("Неверный выбор")
+            return None
+    except ValueError:
+        print("Введите число")
+        return None
+
+
+def main():
+    """Главная функция"""
+    print("\nЗагрузка данных о парковках...")
+    parkings = read_html_parkings()
+
+    if not parkings:
+        print("Не удалось загрузить парковки")
+        print("Убедитесь, что в папке есть HTML файл с картой парковок")
+        return
+
+    # Выбор парковки
+    selected_parking = select_parking(parkings)
+    if not selected_parking:
+        return
+
+
+if __name__ == "__main__":
+    main()
